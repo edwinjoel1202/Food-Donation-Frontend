@@ -1,0 +1,36 @@
+/* src/components/loading-overlay.css */
+.ld-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.ld-spinner {
+  display: flex;
+  gap: 8px;
+  padding: 18px 24px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(4px);
+}
+
+.ld-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  opacity: 0.9;
+  animation: ld-bounce 1s infinite ease-in-out;
+}
+
+.ld-dot:nth-child(2) { animation-delay: 0.15s; }
+.ld-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes ld-bounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: .5; }
+  40% { transform: translateY(-10px); opacity: 1; }
+}
