@@ -1,7 +1,9 @@
+// src/pages/Requests.jsx
 import React, { useEffect, useState } from 'react'
-import { Table, Button } from 'react-bootstrap'
+import { Table } from 'react-bootstrap'
 import api from '../services/api'
 import { toast } from 'react-toastify'
+import LoadingButton from '../components/LoadingButton'
 
 const Requests = () => {
   const [requests, setRequests] = useState([])
@@ -12,7 +14,7 @@ const Requests = () => {
 
   const fetchRequests = async () => {
     try {
-      const res = await api.get('/requests') // NOTE: backend must have this endpoint (you can add list endpoints)
+      const res = await api.get('/requests')
       setRequests(res.data)
     } catch (err) {
       toast.error('Failed to load requests')
@@ -54,8 +56,8 @@ const Requests = () => {
               <td>
                 {r.status === 'PENDING' && (
                   <>
-                    <Button variant="success" size="sm" onClick={() => handleAction(r.id, true)}>Approve</Button>{' '}
-                    <Button variant="danger" size="sm" onClick={() => handleAction(r.id, false)}>Reject</Button>
+                    <LoadingButton size="sm" variant="success" onClickAsync={async () => { await handleAction(r.id, true) }}>Approve</LoadingButton>{' '}
+                    <LoadingButton size="sm" variant="danger" onClickAsync={async () => { await handleAction(r.id, false) }}>Reject</LoadingButton>
                   </>
                 )}
               </td>

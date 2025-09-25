@@ -1,7 +1,9 @@
+// src/pages/VolunteerPanel.jsx
 import React, { useEffect, useState } from 'react'
-import { Table, Button } from 'react-bootstrap'
+import { Table } from 'react-bootstrap'
 import api from '../services/api'
 import { toast } from 'react-toastify'
+import LoadingButton from '../components/LoadingButton'
 
 const VolunteerPanel = () => {
   const [donations, setDonations] = useState([])
@@ -12,21 +14,20 @@ const VolunteerPanel = () => {
 
   const fetch = async () => {
     try {
-      // backend currently doesn't have filtering by status; this call is an example
       const res = await api.get('/donations/available')
       setDonations(res.data)
-    } catch {
-      toast.error('Failed to load')
+    } catch (err) {
+      toast.error('Failed to load donations')
     }
   }
 
   const handleAccept = async (id) => {
     try {
       await api.post(`/volunteer/accept/${id}`)
-      toast.success('Accepted')
+      toast.success('Accepted — donor notified')
       fetch()
-    } catch {
-      toast.error('Failed to accept')
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to accept')
     }
   }
 
@@ -46,7 +47,11 @@ const VolunteerPanel = () => {
             <tr key={d.id}>
               <td>{d.id}</td>
               <td>{d.title}</td>
-              <td><Button size="sm" onClick={() => handleAccept(d.id)}>Accept</Button></td>
+              <td>
+                <LoadingButton size="sm" onClickAsync={async () => { await handleAccept(d.id) }}>
+                  Accept
+                </LoadingButton>
+              </td>
             </tr>
           ))}
         </tbody>

@@ -12,8 +12,7 @@ api.interceptors.request.use(config => {
   const token = getToken()
   if (token) {
     config.headers = {
-      // spread existing headers correctly
-      ...config.headers,
+      ...(config.headers || {}),
       Authorization: `Bearer ${token}`
     }
   }

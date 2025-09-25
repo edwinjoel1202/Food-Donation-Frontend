@@ -16,6 +16,7 @@ import AiTools from './pages/AiTools.jsx';
 import AiChat from './pages/AiChat.jsx';
 import RecipeGenerator from './pages/RecipeGenerator.jsx';
 import PrivateRoute from './components/PrivateRoute.jsx';
+import MyRequests from './pages/MyRequests.jsx'
 
 function App() {
   return (
@@ -33,7 +34,7 @@ function App() {
           <Route path="/requests" element={<PrivateRoute><Requests /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute role="ADMIN"><AdminPanel /></PrivateRoute>} />
           <Route path="/volunteer" element={<PrivateRoute role="VOLUNTEER"><VolunteerPanel /></PrivateRoute>} />
-
+          <Route path="/my-requests" element={<PrivateRoute><MyRequests /></PrivateRoute>} />
           <Route path="/ai-tools" element={<PrivateRoute><AiTools /></PrivateRoute>} />
           <Route path="/ai/chat" element={<PrivateRoute><AiChat /></PrivateRoute>} />
           <Route path="/ai/recipe" element={<PrivateRoute><RecipeGenerator /></PrivateRoute>} />
