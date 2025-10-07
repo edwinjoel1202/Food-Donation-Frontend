@@ -42,14 +42,28 @@ export const AuthProvider = ({ children }) => {
     }
   }
 
-  const register = async (name, email, password, role = 'USER') => {
-    const res = await api.post('/auth/register', { name, email, password, role })
-    const payload = res.data
-    if (payload?.token) {
-      storeToken(payload.token)
-      setUser({ id: payload.userId, email: payload.email, name: payload.name, role: payload.role })
+  const register = async (payload) => {
+    // payload should be an object { name, email, password, role, address, city, state, postalCode, country, lat, lng }
+    const res = await api.post('/auth/register', payload)
+    const body = res.data
+    if (body?.token) {
+      storeToken(body.token)
+      // set user from payload fields if present
+      setUser({
+        id: body.userId,
+        email: body.email,
+        name: body.name,
+        role: body.role,
+        address: body.address,
+        city: body.city,
+        state: body.state,
+        postalCode: body.postalCode,
+        country: body.country,
+        lat: body.lat,
+        lng: body.lng
+      })
       toast.success('Registered')
-      return payload
+      return body
     } else {
       throw new Error('No token returned')
     }
