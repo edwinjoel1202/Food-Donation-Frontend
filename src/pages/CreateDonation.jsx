@@ -1,6 +1,6 @@
 // src/pages/CreateDonation.jsx
 import React, { useState } from 'react';
-import { Card, Form, Button, InputGroup } from 'react-bootstrap';
+import { Card, Form, Button, InputGroup, Row, Col } from 'react-bootstrap';
 import api from '../services/api';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -8,7 +8,20 @@ import LoadingButton from '../components/LoadingButton';
 
 const CreateDonation = () => {
   const [formData, setFormData] = useState({
-    title: '', description: '', category: '', quantity: '', unit: '', expiryAt: '', pickupLat: '', pickupLng: '', imageBase64: ''
+    title: '',
+    description: '',
+    category: '',
+    quantity: '',
+    unit: '',
+    expiryAt: '',
+    pickupLat: '',
+    pickupLng: '',
+    pickupAddress: '',
+    pickupCity: '',
+    pickupState: '',
+    pickupPostalCode: '',
+    pickupCountry: '',
+    imageBase64: ''
   });
   const navigate = useNavigate();
 
@@ -27,6 +40,50 @@ const CreateDonation = () => {
     reader.readAsDataURL(file);
   };
 
+  // Reverse geocode using Nominatim (OpenStreetMap). Replace with Google if desired.
+  const reverseGeocode = async (lat, lng) => {
+    try {
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Reverse geocode failed');
+      const data = await res.json();
+      const addr = data.address || {};
+      setFormData(prev => ({
+        ...prev,
+        pickupAddress: [
+          addr.road, addr.neighbourhood, addr.suburb, addr.house_number, addr.hamlet
+        ].filter(Boolean).join(', ') || data.display_name || prev.pickupAddress,
+        pickupCity: addr.city || addr.town || addr.village || addr.county || prev.pickupCity,
+        pickupState: addr.state || prev.pickupState,
+        pickupPostalCode: addr.postcode || prev.pickupPostalCode,
+        pickupCountry: addr.country || prev.pickupCountry
+      }));
+      toast.success('Address filled from coordinates — please confirm fields if needed');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to reverse-geocode location');
+    }
+  };
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocation not supported by your browser');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setFormData(prev => ({ ...prev, pickupLat: String(lat), pickupLng: String(lng) }));
+        reverseGeocode(lat, lng);
+      },
+      (err) => {
+        toast.error('Failed to get location: ' + (err.message || err.code));
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -34,12 +91,14 @@ const CreateDonation = () => {
         ...formData,
         quantity: Number(formData.quantity) || 0,
         pickupLat: formData.pickupLat ? Number(formData.pickupLat) : null,
-        pickupLng: formData.pickupLng ? Number(formData.pickupLng) : null
+        pickupLng: formData.pickupLng ? Number(formData.pickupLng) : null,
       };
+      // ensure naming matches DTO fields expected by backend
       await api.post('/donations', payload);
       toast.success('Donation created');
       navigate('/my-donations');
     } catch (err) {
+      console.error(err);
       toast.error(err.response?.data?.error || 'Failed to create donation');
     }
   };
@@ -52,13 +111,9 @@ const CreateDonation = () => {
     try {
       const name = formData.title || formData.description;
       const res = await api.get('/ai/categorize', { params: { name } });
-      if (res.data?.category) {
-        setFormData(prev => ({ ...prev, category: res.data.category }));
-      } else if (typeof res.data === 'string') {
-        setFormData(prev => ({ ...prev, category: res.data }));
-      } else {
-        toast.info('AI categorization returned unexpected result');
-      }
+      if (res.data?.category) setFormData(prev => ({ ...prev, category: res.data.category }));
+      else if (typeof res.data === 'string') setFormData(prev => ({ ...prev, category: res.data }));
+      else toast.info('AI categorization returned unexpected result');
     } catch (err) {
       toast.error('AI categorize failed');
     }
@@ -66,45 +121,17 @@ const CreateDonation = () => {
 
   const handlePredictExpiry = async () => {
     if (!formData.title && !formData.description) {
-      toast.info('Provide title or description for expiry prediction');
+      toast.info('Please add a title or description for AI expiry prediction');
       return;
     }
     try {
       const name = formData.title || formData.description;
       const res = await api.get('/ai/predict-expiry', { params: { name } });
-      const raw = res.data || {};
-
-      // Support multiple possible response shapes, now including: { expiryDays: "1" }
-      let days;
-      if (raw?.expiryDays !== undefined && raw.expiryDays !== null) {
-        // expiryDays may come as string, e.g. "1"
-        days = parseInt(String(raw.expiryDays).trim(), 10);
-      } else if (raw?.days !== undefined && raw.days !== null) {
-        days = Number(raw.days);
-      } else if (raw?.daysToExpire !== undefined && raw.daysToExpire !== null) {
-        days = Number(raw.daysToExpire);
-      } else {
-        // fallback: if api returned a primitive number/string directly
-        const maybeNum = Number(raw);
-        days = Number.isFinite(maybeNum) ? maybeNum : undefined;
-      }
-
-      if (typeof days === 'number' && Number.isFinite(days)) {
-        // compute expiry date based on current date + days
-        const created = new Date();
-        const expiry = new Date(created.getTime() + days * 24 * 60 * 60 * 1000);
-
-        // convert to input[type=datetime-local] friendly string (local timezone)
-        const pad = (n) => String(n).padStart(2, '0');
-        const toLocalInput = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-
-        setFormData(prev => ({ ...prev, expiryAt: toLocalInput(expiry) }));
-        toast.success(`Predicted expiry +${days} day${days !== 1 ? 's' : ''}`);
-      } else {
-        toast.error('AI returned unexpected expiry format');
-      }
+      if (res.data?.expiryAt) setFormData(prev => ({ ...prev, expiryAt: res.data.expiryAt }));
+      else if (typeof res.data === 'string') setFormData(prev => ({ ...prev, expiryAt: res.data }));
+      else toast.info('AI expiry returned unexpected result');
     } catch (err) {
-      toast.error('Expiry prediction failed');
+      toast.error('AI expiry failed');
     }
   };
 
@@ -131,32 +158,76 @@ const CreateDonation = () => {
             </InputGroup>
           </Form.Group>
 
-          <Form.Group className="mb-2">
-            <Form.Label>Quantity</Form.Label>
-            <Form.Control name="quantity" type="number" value={formData.quantity} onChange={handleChange} required />
-          </Form.Group>
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-2">
+                <Form.Label>Quantity</Form.Label>
+                <Form.Control name="quantity" type="number" value={formData.quantity} onChange={handleChange} required />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-2">
+                <Form.Label>Unit</Form.Label>
+                <Form.Control name="unit" value={formData.unit} onChange={handleChange} required />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-2">
+                <Form.Label>Expiry At</Form.Label>
+                <Form.Control name="expiryAt" type="datetime-local" value={formData.expiryAt} onChange={handleChange} />
+                <LoadingButton onClickAsync={handlePredictExpiry} variant="outline-secondary" className="mt-1">Predict expiry</LoadingButton>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <hr/>
+
+          <h6>Pickup location</h6>
 
           <Form.Group className="mb-2">
-            <Form.Label>Unit</Form.Label>
-            <Form.Control name="unit" value={formData.unit} onChange={handleChange} required />
+            <Form.Label>Address (auto-filled from coordinates)</Form.Label>
+            <Form.Control name="pickupAddress" as="textarea" rows={2} value={formData.pickupAddress} onChange={handleChange} placeholder="Street / Landmark" />
           </Form.Group>
 
-          <Form.Group className="mb-2">
-            <Form.Label>Expiry At</Form.Label>
-            <div className="d-flex gap-2">
-              <Form.Control name="expiryAt" type="datetime-local" value={formData.expiryAt} onChange={handleChange} />
-              <LoadingButton onClickAsync={handlePredictExpiry} variant="outline-secondary">Predict expiry using AI</LoadingButton>
-            </div>
-          </Form.Group>
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-2">
+                <Form.Label>City</Form.Label>
+                <Form.Control name="pickupCity" value={formData.pickupCity} onChange={handleChange} />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-2">
+                <Form.Label>State / Region</Form.Label>
+                <Form.Control name="pickupState" value={formData.pickupState} onChange={handleChange} />
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-2">
+                <Form.Label>Postal Code</Form.Label>
+                <Form.Control name="pickupPostalCode" value={formData.pickupPostalCode} onChange={handleChange} />
+              </Form.Group>
+            </Col>
+          </Row>
 
-          <Form.Group className="mb-2">
-            <Form.Label>Pickup Latitude</Form.Label>
-            <Form.Control name="pickupLat" type="number" value={formData.pickupLat} onChange={handleChange} />
-          </Form.Group>
-          <Form.Group className="mb-2">
-            <Form.Label>Pickup Longitude</Form.Label>
-            <Form.Control name="pickupLng" type="number" value={formData.pickupLng} onChange={handleChange} />
-          </Form.Group>
+          <Row>
+            <Col md={8}>
+              <Form.Group className="mb-2">
+                <Form.Label>Country</Form.Label>
+                <Form.Control name="pickupCountry" value={formData.pickupCountry} onChange={handleChange} />
+              </Form.Group>
+            </Col>
+            <Col md={4} className="d-flex align-items-end mb-2">
+              <div style={{ width: '100%' }}>
+                <Button variant="outline-primary" onClick={handleUseMyLocation} style={{ width: '100%' }}>
+                  Use my location
+                </Button>
+                <div className="text-muted text-small mt-1" style={{ fontSize: 12 }}>
+                  {formData.pickupLat && formData.pickupLng ? `lat: ${formData.pickupLat}, lng: ${formData.pickupLng}` : 'lat/lng not set'}
+                </div>
+              </div>
+            </Col>
+          </Row>
 
           <Form.Group className="mb-3">
             <Form.Label>Image</Form.Label>
@@ -164,7 +235,6 @@ const CreateDonation = () => {
           </Form.Group>
 
           <LoadingButton type="submit" variant="success" onClickAsync={async (e) => {
-            // this wrapper ensures overlay appears for the submit action too
             e.preventDefault();
             await handleSubmit(e);
           }}>
